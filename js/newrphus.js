@@ -1,11 +1,10 @@
 window.newrphus = window.newrphus || function() {
   var options = {};
   var defaultOptions = {
-    url: 'example.php',
+    url: '/lua_script/',
     callback: function() {
       alert('Thank you! Misprint was sent');
     },
-    userId: 0,
     maxLength: 1000,
     minLength: 4
   };
@@ -41,14 +40,34 @@ window.newrphus = window.newrphus || function() {
     request = null;
   }
 
+  var getContextFromSelection = function(selection, offset) {
+    var selectedRange = selection.rangeCount ? selection.getRangeAt(0) : null;
+    var text = selectedRange.commonAncestorContainer;
+    var new_start = selectedRange.startOffset < offset ? 0 : selectedRange.startOffset - 25;
+    var new_end = selectedRange.endOffset+offset > text.length ? text.length : selectedRange.endOffset + 25;
+
+    selectedRange.setStart(selectedRange.commonAncestorContainer, new_start);
+    selectedRange.setEnd(selectedRange.commonAncestorContainer, new_end);
+    return selectedRange.toString();
+  }
+
   var getSelectedText = function() {
+    var offset = 25; // context offset
     if (window.getSelection) {
-        return window.getSelection().toString();
+        selection = window.getSelection();
+        selected_text = window.getSelection().toString();
+        context = getContextFromSelection(selection, offset);
     } else if (document.getSelection) {
-        return document.getSelection();
+        selection = document.getSelection();
+        selected_text = selection;
+        context = getContextFromSelection(selection, offset);
     } else if (document.selection) {
-        return document.selection.createRange().text;
+        selection = document.selection.createRange();
+        selected_text = document.selection.createRange().text;
+        context = ''; // IE
     }
+
+    return {'text': selected_text, 'context': context};
   }
 
   var onKeyPress = function() {
@@ -56,22 +75,26 @@ window.newrphus = window.newrphus || function() {
     var code = e.keyCode ? e.keyCode : (e.which ? e.which : e.charCode);
 
     if (e.ctrlKey && (code == 13 || code == 10)) {
-        sendReport(getSelectedText());
+        var selected = getSelectedText()
+        sendReport(selected.text, selected.context);
     }
   }
 
-  var sendReport = function(text) {
+  var sendReport = function(text, context) {
     if (text !== undefined && text.length <= options.maxLength && text.length >= options.minLength) {
       options.callback();
 
-      ajaxPost(options.url, {misprintText: text, misprintUrl: window.location.href ? window.location.href : '', misprintUserId: options.userId});
+      ajaxPost(options.url, {
+        text: text,
+        context: context,
+        url: window.location.href ? window.location.href : ''
+      });
     }
   }
 
   var init = function(opts) {
     options.url = opts.url || defaultOptions.url;
     options.callback = opts.callback || defaultOptions.callback;
-    options.userId = opts.userId || defaultOptions.userId;
     options.minLength = opts.minLength || defaultOptions.minLength;
     options.maxLength = opts.maxLength || defaultOptions.maxLength;
 
